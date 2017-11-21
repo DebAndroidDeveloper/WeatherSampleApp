@@ -20,6 +20,7 @@ import android.widget.TextView;
 import com.chase.weathersampleapp.BuildConfig;
 import com.chase.weathersampleapp.R;
 import com.chase.weathersampleapp.callback.WeatherDataCallback;
+import com.chase.weathersampleapp.model.Main;
 import com.chase.weathersampleapp.model.Weather;
 import com.chase.weathersampleapp.model.WeatherData;
 import com.chase.weathersampleapp.network.DaggerNetworkComponent;
@@ -167,18 +168,29 @@ public class MainActivity extends BaseActivity implements WeatherDataCallback {
             long sunset = 0L;*/
 
             Weather weather = weatherData.getWeather().get(0);
-            String main = null;
+            String mainWeather = null;
             String description = null;
             if (weather != null) {
-                main = weather.getMain();
+                mainWeather = weather.getMain();
                 description = weather.getDescription();
                 String icon = weather.getIcon();
                 icon = icon + ".png";
                 imageLoader.displayImage(BuildConfig.WEATHER_API_IMAGE_URL + icon, weatherIcon);
             }
 
-            String weatherDetails = formatWeatherDetails(main, description, String.valueOf(weatherData.getMain().getPressure()),
-                    String.valueOf(weatherData.getMain().getHumidity()), weatherData.getMain().getTempMax(),
+            Main main = weatherData.getMain();
+            String pressure = null;
+            String humidity = null;
+            if (main != null) {
+                if (main.getPressure() != null)
+                    pressure = String.valueOf(main.getPressure());
+
+                if (main.getHumidity() != null)
+                    humidity = String.valueOf(main.getHumidity());
+            }
+
+            String weatherDetails = formatWeatherDetails(mainWeather, description, pressure,
+                    humidity, weatherData.getMain().getTempMax(),
                     weatherData.getMain().getTempMin(), weatherData.getWind().getSpeed());
             this.cityField.setText(weatherData.getName() + ", " + weatherData.getSys().getCountry());
             this.currentTemperatureField.setText(String.valueOf(weatherData.getMain().getTemp()));
