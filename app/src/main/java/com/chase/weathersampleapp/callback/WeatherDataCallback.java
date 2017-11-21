@@ -2,16 +2,13 @@ package com.chase.weathersampleapp.callback;
 
 import android.content.Intent;
 
-public interface WeatherDataCallback {
-    /**
-     * This method is called from broadcast receiver in case of an error
-     *
-     * @param intent
-     */
-    void onHttpResponseError(Intent intent);
+import com.chase.weathersampleapp.model.WeatherData;
+import com.chase.weathersampleapp.network.WeatherServiceResponse;
 
-    /**
-     * This method is called from broadcast receive when data has been fetched
+public interface WeatherDataCallback {
+    void onHttpResponseError(Throwable exception);
+
+    /*
      */
-    void onHttpRequestComplete(Intent intent);
+    void onHttpRequestComplete(WeatherData weatherData);
 }

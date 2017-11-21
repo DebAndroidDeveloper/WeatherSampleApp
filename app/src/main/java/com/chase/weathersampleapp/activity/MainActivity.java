@@ -20,9 +20,12 @@ import android.widget.TextView;
 import com.chase.weathersampleapp.BuildConfig;
 import com.chase.weathersampleapp.R;
 import com.chase.weathersampleapp.callback.WeatherDataCallback;
-import com.chase.weathersampleapp.callback.WeatherDataReceiver;
+import com.chase.weathersampleapp.model.Weather;
 import com.chase.weathersampleapp.model.WeatherData;
-import com.chase.weathersampleapp.network.NetworkIntentService;
+import com.chase.weathersampleapp.network.DaggerNetworkComponent;
+import com.chase.weathersampleapp.network.NetworkComponent;
+import com.chase.weathersampleapp.network.NetworkModule;
+import com.chase.weathersampleapp.network.WeatherApiService;
 import com.chase.weathersampleapp.util.Constants;
 import com.chase.weathersampleapp.util.SharedPreferenceUtil;
 import com.nostra13.universalimageloader.core.ImageLoader;
@@ -37,19 +40,27 @@ import java.io.StringReader;
 import java.text.DateFormat;
 import java.util.Date;
 
+import javax.inject.Inject;
+
+import rx.Subscription;
+import rx.subscriptions.CompositeSubscription;
+
 public class MainActivity extends BaseActivity implements WeatherDataCallback {
 
     private TextView cityField;
     private TextView detailsField;
     private TextView currentTemperatureField;
-    //    private TextView humidity_field;
-//    private TextView pressure_field;
     private ImageView weatherIcon;
     private TextView updatedField;
-    private WeatherDataReceiver weatherDataReceiver;
-    private IntentFilter mFilter;
+    //    private WeatherDataReceiver weatherDataReceiver;
+//    private IntentFilter mFilter;
+    NetworkComponent networkComponent;
+    @Inject
+    WeatherApiService weatherApiService;
+    private CompositeSubscription subscriptions;
     private ProgressDialog mProgressDialog;
     private ImageLoader imageLoader;
+    private static final String DEFAULT_LOCATION = "Dallas,us";
 
     @Override
     public String getTag() {
@@ -64,17 +75,24 @@ public class MainActivity extends BaseActivity implements WeatherDataCallback {
         updatedField = (TextView) findViewById(R.id.updated_field);
         detailsField = (TextView) findViewById(R.id.details_field);
         currentTemperatureField = (TextView) findViewById(R.id.current_temperature_field);
-//        humidity_field = (TextView)findViewById(R.id.humidity_field);
-//        pressure_field = (TextView)findViewById(R.id.pressure_field);
         weatherIcon = (ImageView) findViewById(R.id.weather_icon);
+        this.networkComponent = DaggerNetworkComponent.builder().networkModule(new NetworkModule()).build();
+        this.networkComponent.inject(this);
+        this.subscriptions = new CompositeSubscription();
+        //default location to get the weather
+        String location = SharedPreferenceUtil.readPreference(this, Constants.ApiMethods.PREFERENCE_LOCATION, DEFAULT_LOCATION);
+        Subscription subscription = this.weatherApiService.getWeatherData(this, location, "imperial", this.getString(R.string.open_weather_api_key));
+        subscriptions.add(subscription);
+/*
         this.weatherDataReceiver = new WeatherDataReceiver(this);
         mFilter = new IntentFilter();
         mFilter.addAction(Constants.IntentActions.ACTION_ERROR);
         mFilter.addAction(Constants.IntentActions.ACTION_SUCCESS);
+*/
         ImageLoaderConfiguration config = new ImageLoaderConfiguration.Builder(this).build();
         this.imageLoader = ImageLoader.getInstance();
         this.imageLoader.init(config);
-        NetworkIntentService.getWeatherData(this);
+        //NetworkIntentService.getWeatherData(this);
         mProgressDialog = new ProgressDialog(this);
         mProgressDialog.setMessage("One moment please...");
         mProgressDialog.setCancelable(false);
@@ -100,36 +118,37 @@ public class MainActivity extends BaseActivity implements WeatherDataCallback {
     @Override
     protected void onResume() {
         super.onResume();
-        this.registerReceiver(weatherDataReceiver, mFilter);
+//        this.registerReceiver(weatherDataReceiver, mFilter);
     }
 
     @Override
     protected void onStop() {
         super.onStop();
-        this.unregisterReceiver(weatherDataReceiver);
+//        this.unregisterReceiver(weatherDataReceiver);
+        subscriptions.unsubscribe();
     }
 
     @Override
-    public void onHttpResponseError(Intent intent) {
+    public void onHttpResponseError(Throwable exception) {
         if (mProgressDialog != null && mProgressDialog.isShowing()) {
             mProgressDialog.dismiss();
         }
-        String message = intent.getStringExtra(Constants.IntentExtras.MESSAGE);
-        Log.e(getTag(), message);
-        showErrorDialog(message);
+        /*String message = intent.getStringExtra(Constants.IntentExtras.MESSAGE);
+        Log.e(getTag(), message);*/
+        showErrorDialog(exception.getMessage());
     }
 
     @Override
-    public void onHttpRequestComplete(Intent intent) {
+    public void onHttpRequestComplete(WeatherData weatherData) {
         if (mProgressDialog != null && mProgressDialog.isShowing()) {
             mProgressDialog.dismiss();
         }
 
-        String weatherData = intent.getStringExtra(Constants.IntentExtras.MESSAGE);
+        //String weatherData = intent.getStringExtra(Constants.IntentExtras.MESSAGE);
 
-        //JsonReader jsonReader = new JsonReader( new StringReader(weatherData));
         try {
-            JSONObject jsonObject = new JSONObject(weatherData);
+
+            /*JSONObject jsonObject = new JSONObject(weatherData);
             WeatherData currentWeatherData = new WeatherData();
             currentWeatherData.setCity(jsonObject.getString("name"));
             currentWeatherData.setCountry(jsonObject.getJSONObject("sys").getString("country"));
@@ -145,109 +164,36 @@ public class MainActivity extends BaseActivity implements WeatherDataCallback {
             double tempMin = mainObject.getDouble("temp_min");
             double speed = jsonObject.getJSONObject("wind").getDouble("speed");
             long sunrise = 0L;
-            long sunset = 0L;
+            long sunset = 0L;*/
 
-           /* jsonReader.beginObject();
-            while (jsonReader.hasNext()) {
-                //String name = jsonReader.nextName();
-                if(name.equals("main")){
-                    jsonReader.beginObject();
-                    while (jsonReader.hasNext()){
-                        String key = jsonReader.nextName();
-                        if(key.equals("temp")){
-                            double current_temp = jsonReader.nextDouble();
-                            currentWeatherData.setCurrentTemp(String.valueOf(current_temp));
-                        }else if(key.equals("pressure")){
-                            pressure = jsonReader.nextInt();
-                        }else if(key.equals("humidity")){
-                            humidity = jsonReader.nextInt();
-                        }else if(key.equals("temp_max")){
-                            tempMax = jsonReader.nextDouble();
-                        }else if(key.equals("temp_min")){
-                            tempMin = jsonReader.nextDouble();
-                        }else {
-                            jsonReader.skipValue();
-                        }
-                    }
-                    jsonReader.endObject();
-                }else if(name.equals("wind")){
-                    jsonReader.beginObject();
-                    while (jsonReader.hasNext()){
-                        String key = jsonReader.nextName();
-                        if(key.equals("speed")) {
-                            speed = jsonReader.nextDouble();
-                        }else {
-                            jsonReader.skipValue();
-                        }
-                    }
-
-                    jsonReader.endObject();
-                }else if(name.equals("name")){
-                    String city = jsonReader.nextString();
-                    currentWeatherData.setCity(city);
-                }else if(name.equals("sys")){
-                    jsonReader.beginObject();
-                    while (jsonReader.hasNext()) {
-                        String key = jsonReader.nextName();
-                        if(key.equals("sunrise")) {
-                            sunrise = jsonReader.nextLong();
-                        }else if(key.equals("sunset")){
-                            sunset = jsonReader.nextLong();
-                        }else if(key.equals("country")){
-                            String country = jsonReader.nextString();
-                            currentWeatherData.setCountry(country);
-                        }else {
-                            jsonReader.skipValue();
-                        }
-                    }
-                    jsonReader.endObject();
-                }else if(name.equals("weather") && jsonReader.peek() != JsonToken.NULL){
-                    jsonReader.beginArray();
-                    while(jsonReader.hasNext()){
-                        jsonReader.beginObject();
-                        while (jsonReader.hasNext()) {
-                            String key = jsonReader.nextName();
-                            if(key.equals("main")) {
-                                main = jsonReader.nextString();
-                            }else if(key.equals("description")){
-                                description = jsonReader.nextString();
-                            }else if(key.equals("icon")){
-                                String icon = jsonReader.nextString();
-                                icon = icon + ".png";
-                                imageLoader.displayImage(BuildConfig.WEATHER_API_IMAGE_URL + icon, weatherIcon);
-                                currentWeatherData.setWeatherIcon(icon);
-                            }else {
-                                jsonReader.skipValue();
-                            }
-                        }
-                        jsonReader.endObject();
-                    }
-                    jsonReader.endArray();
-                }else if(name.equals("dt")){
-                    long dateTime = jsonReader.nextLong();
-                    DateFormat df = DateFormat.getDateTimeInstance();
-                    String updatedOn = df.format(new Date(dateTime*1000));
-                    updatedField.setText("Last update:  " + updatedOn);
-                }
+            Weather weather = weatherData.getWeather().get(0);
+            String main = null;
+            String description = null;
+            if (weather != null) {
+                main = weather.getMain();
+                description = weather.getDescription();
+                String icon = weather.getIcon();
+                icon = icon + ".png";
+                imageLoader.displayImage(BuildConfig.WEATHER_API_IMAGE_URL + icon, weatherIcon);
             }
-            jsonReader.endObject();*/
-            String weatherDetails = formatWeatherDetails(main, description, pressure, humidity, tempMax,
-                    tempMin, speed, sunrise, sunset);
-            currentWeatherData.setWeatherDetails(weatherDetails);
-            this.cityField.setText(currentWeatherData.getCity() + ", " + currentWeatherData.getCountry());
-            this.currentTemperatureField.setText(currentWeatherData.getCurrentTemp());
+
+            String weatherDetails = formatWeatherDetails(main, description, String.valueOf(weatherData.getMain().getPressure()),
+                    String.valueOf(weatherData.getMain().getHumidity()), weatherData.getMain().getTempMax(),
+                    weatherData.getMain().getTempMin(), weatherData.getWind().getSpeed());
+            this.cityField.setText(weatherData.getName() + ", " + weatherData.getSys().getCountry());
+            this.currentTemperatureField.setText(String.valueOf(weatherData.getMain().getTemp()));
             this.detailsField.setText(weatherDetails);
             DateFormat df = DateFormat.getDateTimeInstance();
-            String updatedOn = df.format(new Date(jsonObject.getLong("dt") * 1000));
+            String updatedOn = df.format(new Date(weatherData.getDt() * 1000));
             updatedField.setText("Last update:  " + updatedOn);
-            String icon = details.getString("icon");
-            icon = icon + ".png";
-            imageLoader.displayImage(BuildConfig.WEATHER_API_IMAGE_URL + icon, weatherIcon);
+            //String icon = details.getString("icon");
             Log.d(getTag(), weatherDetails);
-        } catch (JSONException e) {
+            Log.d(getTag(), weatherData.getDt() + "");
+        }
+        /*catch (JSONException e) {
             e.printStackTrace();
             Log.e(getTag(), e.getMessage());
-        } catch (Exception e) {
+        }*/ catch (Exception e) {
             e.printStackTrace();
             Log.e(getTag(), e.getMessage());
         }
@@ -271,12 +217,14 @@ public class MainActivity extends BaseActivity implements WeatherDataCallback {
     private void changeLocation(String location) {
         SharedPreferenceUtil.savePreference(this, Constants.ApiMethods.PREFERENCE_LOCATION, location);
         //call the open weather API and update the UI
-        NetworkIntentService.getWeatherData(this);
+        //NetworkIntentService.getWeatherData(this);
+        Subscription subscription = this.weatherApiService.getWeatherData(this, location, "imperial", this.getString(R.string.open_weather_api_key));
+        subscriptions.add(subscription);
         mProgressDialog.show();
     }
 
     private String formatWeatherDetails(String main, String description, String pressure, String humidity,
-                                        double tempMax, double tempMin, double speed, long sunrise, long sunset) {
+                                        double tempMax, double tempMin, double speed) {
         StringBuilder stringBuilder = new StringBuilder();
         stringBuilder.append(main);
         stringBuilder.append("\n");

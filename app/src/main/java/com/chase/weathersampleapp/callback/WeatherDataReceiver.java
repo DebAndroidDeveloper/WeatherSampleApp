@@ -16,9 +16,9 @@ public class WeatherDataReceiver extends BroadcastReceiver {
     @Override
     public void onReceive(Context context, Intent intent) {
         if (intent.getAction().equals(Constants.IntentActions.ACTION_ERROR)) {
-            mWeatherDataCallback.onHttpResponseError(intent);
+            //mWeatherDataCallback.onHttpResponseError(intent);
         } else if (intent.getAction().equals(Constants.IntentActions.ACTION_SUCCESS)) {
-            mWeatherDataCallback.onHttpRequestComplete(intent);
+            //mWeatherDataCallback.onHttpRequestComplete(intent);
         }
     }
 }
