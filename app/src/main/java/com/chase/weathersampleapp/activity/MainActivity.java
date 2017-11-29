@@ -1,18 +1,12 @@
 package com.chase.weathersampleapp.activity;
 
 import android.app.ProgressDialog;
-import android.content.DialogInterface;
-import android.content.Intent;
-import android.content.IntentFilter;
+import android.content.Context;
 import android.os.Bundle;
-import android.support.v7.app.AlertDialog;
-import android.text.InputType;
-import android.util.JsonReader;
-import android.util.JsonToken;
 import android.util.Log;
-import android.view.Menu;
-import android.view.MenuInflater;
-import android.view.MenuItem;
+import android.view.KeyEvent;
+import android.view.inputmethod.EditorInfo;
+import android.view.inputmethod.InputMethodManager;
 import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.TextView;
@@ -32,12 +26,6 @@ import com.chase.weathersampleapp.util.SharedPreferenceUtil;
 import com.nostra13.universalimageloader.core.ImageLoader;
 import com.nostra13.universalimageloader.core.ImageLoaderConfiguration;
 
-import org.json.JSONException;
-import org.json.JSONObject;
-import org.w3c.dom.Text;
-
-import java.io.IOException;
-import java.io.StringReader;
 import java.text.DateFormat;
 import java.util.Date;
 
@@ -46,15 +34,14 @@ import javax.inject.Inject;
 import rx.Subscription;
 import rx.subscriptions.CompositeSubscription;
 
-public class MainActivity extends BaseActivity implements WeatherDataCallback {
+public class MainActivity extends BaseActivity implements WeatherDataCallback, TextView.OnEditorActionListener {
 
+    private EditText searchEditText;
     private TextView cityField;
     private TextView detailsField;
     private TextView currentTemperatureField;
     private ImageView weatherIcon;
     private TextView updatedField;
-    //    private WeatherDataReceiver weatherDataReceiver;
-//    private IntentFilter mFilter;
     NetworkComponent networkComponent;
     @Inject
     WeatherApiService weatherApiService;
@@ -72,6 +59,8 @@ public class MainActivity extends BaseActivity implements WeatherDataCallback {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+        this.searchEditText = (EditText) findViewById(R.id.search_editText);
+        this.searchEditText.setOnEditorActionListener(this);
         cityField = (TextView) findViewById(R.id.city_field);
         updatedField = (TextView) findViewById(R.id.updated_field);
         detailsField = (TextView) findViewById(R.id.details_field);
@@ -84,16 +73,9 @@ public class MainActivity extends BaseActivity implements WeatherDataCallback {
         String location = SharedPreferenceUtil.readPreference(this, Constants.ApiMethods.PREFERENCE_LOCATION, DEFAULT_LOCATION);
         Subscription subscription = this.weatherApiService.getWeatherData(this, location, "imperial", this.getString(R.string.open_weather_api_key));
         subscriptions.add(subscription);
-/*
-        this.weatherDataReceiver = new WeatherDataReceiver(this);
-        mFilter = new IntentFilter();
-        mFilter.addAction(Constants.IntentActions.ACTION_ERROR);
-        mFilter.addAction(Constants.IntentActions.ACTION_SUCCESS);
-*/
         ImageLoaderConfiguration config = new ImageLoaderConfiguration.Builder(this).build();
         this.imageLoader = ImageLoader.getInstance();
         this.imageLoader.init(config);
-        //NetworkIntentService.getWeatherData(this);
         mProgressDialog = new ProgressDialog(this);
         mProgressDialog.setMessage("One moment please...");
         mProgressDialog.setCancelable(false);
@@ -101,31 +83,13 @@ public class MainActivity extends BaseActivity implements WeatherDataCallback {
     }
 
     @Override
-    public boolean onCreateOptionsMenu(Menu menu) {
-        MenuInflater menuInflater = getMenuInflater();
-        menuInflater.inflate(R.menu.weather, menu);
-        return true;
-    }
-
-    @Override
-    public boolean onOptionsItemSelected(MenuItem item) {
-        if (item.getItemId() == R.id.change_city) {
-            showInputDialog();
-        }
-        return super.onOptionsItemSelected(item);
-
-    }
-
-    @Override
     protected void onResume() {
         super.onResume();
-//        this.registerReceiver(weatherDataReceiver, mFilter);
     }
 
     @Override
     protected void onStop() {
         super.onStop();
-//        this.unregisterReceiver(weatherDataReceiver);
         subscriptions.unsubscribe();
     }
 
@@ -134,8 +98,6 @@ public class MainActivity extends BaseActivity implements WeatherDataCallback {
         if (mProgressDialog != null && mProgressDialog.isShowing()) {
             mProgressDialog.dismiss();
         }
-        /*String message = intent.getStringExtra(Constants.IntentExtras.MESSAGE);
-        Log.e(getTag(), message);*/
         showErrorDialog(exception.getMessage());
     }
 
@@ -145,28 +107,8 @@ public class MainActivity extends BaseActivity implements WeatherDataCallback {
             mProgressDialog.dismiss();
         }
 
-        //String weatherData = intent.getStringExtra(Constants.IntentExtras.MESSAGE);
 
         try {
-
-            /*JSONObject jsonObject = new JSONObject(weatherData);
-            WeatherData currentWeatherData = new WeatherData();
-            currentWeatherData.setCity(jsonObject.getString("name"));
-            currentWeatherData.setCountry(jsonObject.getJSONObject("sys").getString("country"));
-            JSONObject details = jsonObject.getJSONArray("weather").getJSONObject(0);
-            JSONObject mainObject = jsonObject.getJSONObject("main");
-
-            currentWeatherData.setCurrentTemp(String.valueOf(mainObject.getDouble("temp")));
-            String main = details.getString("main");
-            String description = details.getString("description");
-            String pressure = mainObject.getString("pressure");
-            String humidity = mainObject.getString("humidity");
-            double tempMax = mainObject.getDouble("temp_max");
-            double tempMin = mainObject.getDouble("temp_min");
-            double speed = jsonObject.getJSONObject("wind").getDouble("speed");
-            long sunrise = 0L;
-            long sunset = 0L;*/
-
             Weather weather = weatherData.getWeather().get(0);
             String mainWeather = null;
             String description = null;
@@ -198,41 +140,11 @@ public class MainActivity extends BaseActivity implements WeatherDataCallback {
             DateFormat df = DateFormat.getDateTimeInstance();
             String updatedOn = df.format(new Date(weatherData.getDt() * 1000));
             updatedField.setText("Last update:  " + updatedOn);
-            //String icon = details.getString("icon");
             Log.d(getTag(), weatherDetails);
-            Log.d(getTag(), weatherData.getDt() + "");
-        }
-        /*catch (JSONException e) {
-            e.printStackTrace();
-            Log.e(getTag(), e.getMessage());
-        }*/ catch (Exception e) {
+        } catch (Exception e) {
             e.printStackTrace();
             Log.e(getTag(), e.getMessage());
         }
-    }
-
-    private void showInputDialog() {
-        AlertDialog.Builder builder = new AlertDialog.Builder(this);
-        builder.setTitle("Change Location");
-        final EditText input = new EditText(this);
-        input.setInputType(InputType.TYPE_CLASS_TEXT);
-        builder.setView(input);
-        builder.setPositiveButton("Change", new DialogInterface.OnClickListener() {
-            @Override
-            public void onClick(DialogInterface dialog, int which) {
-                changeLocation(input.getText().toString());
-            }
-        });
-        builder.show();
-    }
-
-    private void changeLocation(String location) {
-        SharedPreferenceUtil.savePreference(this, Constants.ApiMethods.PREFERENCE_LOCATION, location);
-        //call the open weather API and update the UI
-        //NetworkIntentService.getWeatherData(this);
-        Subscription subscription = this.weatherApiService.getWeatherData(this, location, "imperial", this.getString(R.string.open_weather_api_key));
-        subscriptions.add(subscription);
-        mProgressDialog.show();
     }
 
     private String formatWeatherDetails(String main, String description, String pressure, String humidity,
@@ -254,5 +166,27 @@ public class MainActivity extends BaseActivity implements WeatherDataCallback {
         stringBuilder.append("\n");
         stringBuilder.append("Pressure        " + pressure + "hPa");
         return stringBuilder.toString();
+    }
+
+    @Override
+    public boolean onEditorAction(TextView textView, int actionId, KeyEvent keyEvent) {
+        if (actionId == EditorInfo.IME_ACTION_SEARCH) {
+            performSearch();
+            return true;
+        }
+        return false;
+    }
+
+    private void performSearch() {
+        searchEditText.clearFocus();
+        InputMethodManager inputMethodManager = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+        inputMethodManager.hideSoftInputFromWindow(searchEditText.getWindowToken(), 0);
+        String searchQuery = searchEditText.getText().toString();
+        Log.d(getTag(), "Search query : " + searchQuery);
+        SharedPreferenceUtil.savePreference(this, Constants.ApiMethods.PREFERENCE_LOCATION, searchQuery);
+        //call the open weather API and update the UI
+        Subscription subscription = this.weatherApiService.getWeatherData(this, searchQuery, "imperial", this.getString(R.string.open_weather_api_key));
+        subscriptions.add(subscription);
+        mProgressDialog.show();
     }
 }
